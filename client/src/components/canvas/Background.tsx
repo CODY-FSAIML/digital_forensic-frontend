@@ -1,5 +1,5 @@
 import { Canvas, useFrame } from "@react-three/fiber";
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useEffect } from "react";
 import * as THREE from "three";
 import { CanvasErrorBoundary } from "./ErrorBoundary";
 
@@ -7,6 +7,8 @@ function ParticleField() {
   const count = 2000;
   const mesh = useRef<THREE.InstancedMesh>(null);
   const light = useRef<THREE.PointLight>(null);
+  const geomRef = useRef<THREE.BufferGeometry | null>(null);
+  const matRef = useRef<THREE.Material | null>(null);
 
   const dummy = useMemo(() => new THREE.Object3D(), []);
   
@@ -62,12 +64,30 @@ function ParticleField() {
     }
   });
 
+  useEffect(() => {
+    return () => {
+      if (geomRef.current) {
+        try { geomRef.current.dispose(); } catch (e) { /* ignore */ }
+      }
+      if (matRef.current) {
+        try { matRef.current.dispose(); } catch (e) { /* ignore */ }
+      }
+      if (mesh.current) {
+        try {
+          mesh.current.geometry?.dispose();
+          const m = mesh.current.material as any;
+          if (m?.dispose) m.dispose();
+        } catch (e) { /* ignore */ }
+      }
+    };
+  }, []);
+
   return (
     <>
       <pointLight ref={light} distance={40} intensity={8} color="#22d3ee" />
       <instancedMesh ref={mesh} args={[undefined, undefined, count]}>
-        <dodecahedronGeometry args={[0.2, 0]} />
-        <meshPhongMaterial color="#020617" emissive="#0ea5e9" emissiveIntensity={0.5} />
+        <dodecahedronGeometry ref={geomRef as any} args={[0.2, 0]} />
+        <meshPhongMaterial ref={matRef as any} color="#020617" emissive="#0ea5e9" emissiveIntensity={0.5} />
       </instancedMesh>
     </>
   );
@@ -83,7 +103,27 @@ export default function Background() {
   return (
     <div className="fixed inset-0 -z-10 bg-[#020617] overflow-hidden pointer-events-none">
       <CanvasErrorBoundary fallback={<div className="absolute inset-0 bg-[#020617] opacity-80" />}>
-        <Canvas camera={{ position: [0, 0, 15], fov: 75 }} gl={{ powerPreference: "low-power" }}>
+        <Canvas
+          camera={{ position: [0, 0, 15], fov: 75 }}
+          gl={{ powerPreference: "high-performance", antialias: false, precision: "mediump" }}
+          onCreated={(state) => {
+            const gl = state.gl;
+            const dom = gl.domElement as HTMLCanvasElement;
+
+            function onLost(e: Event) {
+              try { (e as Event).preventDefault(); } catch (err) {}
+              console.warn("WebGL context lost");
+            }
+
+            function onRestored() {
+              console.warn("WebGL context restored, re-rendering scene");
+              try { state.invalidate(); } catch (err) {}
+            }
+
+            dom.addEventListener("webglcontextlost", onLost, false);
+            dom.addEventListener("webglcontextrestored", onRestored, false);
+          }}
+        >
           <color attach="background" args={['#020617']} />
           <ambientLight intensity={0.5} />
           <ParticleField />

@@ -8,84 +8,53 @@ export interface ForensicResponse {
   metadata: Record<string, any>;
 }
 
-// In a real application, you would connect to:
-// export const api = axios.create({ baseURL: "http://127.0.0.1:8000/api/" });
+// Create axios instance pointing to the forensic backend.
+// Prefer `import.meta.env.VITE_API_URL`, fall back to the Render URL in production.
+const axiosInstance = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || "https://digital-forensics-backend.onrender.com",
+});
+// Ensure axios does not force JSON Content-Type for POSTs so the browser
+// can set the multipart/form-data boundary when sending FormData.
+delete axiosInstance.defaults.headers.post?.["Content-Type"];
 
-// Mock API for prototype demonstration
+// Export a wrapper that handles multipart/form-data properly
 export const api = {
-  post: async (endpoint: string, data: any): Promise<{ data: ForensicResponse }> => {
-    // Simulate network delay for "processing" state
-    await new Promise((resolve) => setTimeout(resolve, 3500));
-    
-    // Simulate different responses based on endpoint
-    if (endpoint.includes("video")) {
-      return {
-        data: {
-          is_fake: true,
-          confidence: 94.2,
-          reasons: [
-            "Inconsistent facial muscle micro-movements detected at 0:12",
-            "Unnatural blink rate and eye trajectory",
-            "Audio-visual sync discrepancy of 14ms",
-            "Artifacts detected in neck boundary blending"
-          ],
-          metadata: {
-            resolution: "1920x1080",
-            fps: 30,
-            duration: "0:45",
-            model_used: "DeepFake-V3-Detector"
-          }
-        }
-      };
-    }
-    
-    if (endpoint.includes("audio")) {
-      return {
-        data: {
-          is_fake: true,
-          confidence: 88.7,
-          reasons: [
-            "Unnatural spectral harmonics in vocal range 4kHz-8kHz",
-            "Absence of expected room impulse response",
-            "Synthetic breathing artifacts detected"
-          ],
-          metadata: {
-            sample_rate: "44100Hz",
-            channels: 2,
-            duration: "0:15",
-            model_used: "Voice-Clone-Scanner-X"
-          }
-        }
-      };
-    }
-    
-    if (endpoint.includes("image")) {
-      return {
-        data: {
-          is_fake: false,
-          confidence: 91.5,
-          reasons: [
-            "Error level analysis shows consistent compression",
-            "No copy-move forgery artifacts detected",
-            "Metadata structure aligns with standard camera sensors"
-          ],
-          metadata: {
-            extracted_text: "SECURITY CLEARANCE: LEVEL 5\nID: 9482-A\nSTATUS: ACTIVE",
-            resolution: "4000x3000",
-            color_space: "sRGB",
-            model_used: "Image-Forensics-Pro"
-          }
-        }
-      };
+  post: async (
+    endpoint: string,
+    data: any
+  ): Promise<{ data: ForensicResponse }> => {
+    // Accept either a prepared FormData or an object with a file property.
+    let payload: FormData;
+
+    if (data instanceof FormData) {
+      payload = data;
+    } else {
+      payload = new FormData();
+      if (data?.file) {
+        payload.append("file", data.file);
+      }
     }
 
-    return {
-      data: {
-        is_fake: false,
-        confidence: 0,
-        reasons: [],
-        metadata: {}
-      }
-    };
-  }
+    // Ensure axios does not set application/json for this request
+    delete axiosInstance.defaults.headers.post?.["Content-Type"];
+
+    // Send the FormData directly; browser will set Content-Type with boundary
+    try {
+      const response = await axiosInstance.post(endpoint, payload);
+      const responseData = response.data as any;
+      console.log("[API Response]", endpoint, responseData);
+
+      return {
+        data: {
+          is_fake: responseData?.is_fake ?? false,
+          confidence: responseData?.confidence ?? 0,
+          reasons: responseData?.reasons ?? [],
+          metadata: responseData?.metadata ?? {}
+        }
+      };
+    } catch (error) {
+      console.error("[API Error]", endpoint, error);
+      throw error;
+    }
+  },
 };

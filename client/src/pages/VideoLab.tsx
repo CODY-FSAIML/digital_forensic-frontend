@@ -24,7 +24,11 @@ export default function VideoLab() {
     setIsProcessing(true);
     setResult(null);
     try {
-      const response = await api.post("/analyze/video/", { file });
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await api.post("/analyze/video/", formData);
+      console.log("Forensic Response:", response.data);
       setResult(response.data);
     } catch (error) {
       console.error(error);
@@ -214,7 +218,7 @@ export default function VideoLab() {
                       </h2>
                     </div>
                     <div className="font-mono text-sm">
-                      CONFIDENCE LEVEL: <span className="font-bold text-white">{result.confidence.toFixed(1)}%</span>
+                      CONFIDENCE LEVEL: <span className="font-bold text-white">{typeof result.confidence === 'number' ? result.confidence.toFixed(1) : 'N/A'}%</span>
                     </div>
                   </div>
 

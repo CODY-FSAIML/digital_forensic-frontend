@@ -97,10 +97,14 @@ export default function AudioLab() {
     setIsProcessing(true);
     setResult(null);
     try {
-      const response = await api.post("/analyze/audio/", { file });
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await api.post("/analyze/audio/", formData);
+      console.log("Forensic Response:", response.data);
       setResult(response.data);
     } catch (error) {
-      console.error(error);
+      console.error("Audio Analysis Error:", error);
     } finally {
       setIsProcessing(false);
     }
@@ -254,7 +258,7 @@ export default function AudioLab() {
                       </h2>
                     </div>
                     <div className="font-mono text-sm">
-                      CONFIDENCE: <span className="font-bold text-white">{result.confidence.toFixed(1)}%</span>
+                      CONFIDENCE: <span className="font-bold text-white">{typeof result.confidence === 'number' ? result.confidence.toFixed(1) : 'N/A'}%</span>
                     </div>
                   </div>
 

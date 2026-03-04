@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Wireframe } from "@react-three/drei";
 import * as THREE from "three";
@@ -8,6 +8,10 @@ function HologramCube() {
   const group = useRef<THREE.Group>(null);
   const outerRef = useRef<THREE.Mesh>(null);
   const innerRef = useRef<THREE.Mesh>(null);
+  const outerGeomRef = useRef<THREE.BufferGeometry | null>(null);
+  const outerMatRef = useRef<THREE.Material | null>(null);
+  const innerGeomRef = useRef<THREE.BufferGeometry | null>(null);
+  const innerMatRef = useRef<THREE.Material | null>(null);
 
   useFrame((state) => {
     const time = state.clock.getElapsedTime();
@@ -30,24 +34,36 @@ function HologramCube() {
     }
   });
 
+  useEffect(() => {
+    return () => {
+      try {
+        if (outerGeomRef.current) outerGeomRef.current.dispose();
+        if (outerMatRef.current) (outerMatRef.current as any).dispose();
+        if (innerGeomRef.current) innerGeomRef.current.dispose();
+        if (innerMatRef.current) (innerMatRef.current as any).dispose();
+      } catch (e) { /* ignore */ }
+    };
+  }, []);
+
   return (
     <group ref={group}>
       {/* Outer Cage */}
       <mesh ref={outerRef}>
-        <icosahedronGeometry args={[2, 0]} />
-        <meshBasicMaterial color="#22d3ee" wireframe transparent opacity={0.3} />
+        <icosahedronGeometry ref={outerGeomRef as any} args={[2, 0]} />
+        <meshBasicMaterial ref={outerMatRef as any} color="#22d3ee" wireframe transparent opacity={0.3} />
         <Wireframe stroke={"#22d3ee"} thickness={0.05} />
       </mesh>
       
       {/* Inner Core */}
       <mesh ref={innerRef}>
-        <octahedronGeometry args={[1, 0]} />
-        <meshStandardMaterial 
-          color="#020617" 
-          emissive="#22d3ee" 
-          emissiveIntensity={2} 
-          transparent 
-          opacity={0.8} 
+        <octahedronGeometry ref={innerGeomRef as any} args={[1, 0]} />
+        <meshStandardMaterial
+          ref={innerMatRef as any}
+          color="#020617"
+          emissive="#22d3ee"
+          emissiveIntensity={2}
+          transparent
+          opacity={0.8}
         />
       </mesh>
       
@@ -62,10 +78,30 @@ export default function ProcessingCube() {
     <div className="w-full h-[300px] flex flex-col items-center justify-center relative">
       <div className="absolute inset-0">
         <CanvasErrorBoundary>
-          <Canvas camera={{ position: [0, 0, 5], fov: 45 }} gl={{ powerPreference: "low-power" }}>
-            <ambientLight intensity={0.5} />
-            <HologramCube />
-          </Canvas>
+          <Canvas
+            camera={{ position: [0, 0, 5], fov: 45 }}
+            gl={{ powerPreference: "high-performance", antialias: false, precision: "mediump" }}
+            onCreated={(state) => {
+              const gl = state.gl;
+              const dom = gl.domElement as HTMLCanvasElement;
+
+              function onLost(e: Event) {
+                try { (e as Event).preventDefault(); } catch (err) {}
+                console.warn("WebGL context lost");
+              }
+
+              function onRestored() {
+                console.warn("WebGL context restored, re-rendering scene");
+                try { state.invalidate(); } catch (err) {}
+              }
+
+              dom.addEventListener("webglcontextlost", onLost, false);
+              dom.addEventListener("webglcontextrestored", onRestored, false);
+            }}
+          >
+              <ambientLight intensity={0.5} />
+              <HologramCube />
+            </Canvas>
         </CanvasErrorBoundary>
       </div>
       
